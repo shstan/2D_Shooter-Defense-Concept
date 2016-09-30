@@ -1,0 +1,290 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Turret_Defense</title>
+        <script src="//cdn.jsdelivr.net/phaser/2.5.0/phaser.min.js"></script>
+    </head>
+    <body>
+
+    <script type="text/javascript">
+    // new update 1
+
+    window.onload = function() {
+
+        var game = new Phaser.Game(800, 600, Phaser.AUTO, 'phaser-example', { preload: preload, create: create, update: update, render: render});
+
+        function preload() {
+            game.load.image('GAU', 'assets/sprites/GAU.png');
+            game.load.image('cannon01', 'assets/sprites/tank_turret1.png');
+            game.load.image('cannon02', 'assets/sprites/tank_turret2.png');
+            game.load.image('missileTurret', 'assets/sprites/MissileTurret.png');
+            game.load.image('bullet', 'assets/sprites/autocannon_bullet.png');
+            game.load.image('shell40', 'assets/sprites/40mm.png');
+            game.load.image('shell105', 'assets/sprites/105mm.png');
+            game.load.image('hellfire', 'assets/sprites/hellfire.gif');
+            game.load.image('enemy-tank', 'assets/sprites/tiger_p.gif');
+            game.load.spritesheet('explosion', 'assets/sprites/explode.png', 128, 128);
+        }
+
+        var sprite1;
+        var sprite2;
+        var sprite3;
+        var sprite4;
+        var mg;
+        var bofors;
+        var m102;
+        var missilePod;
+        var mgFireButton;
+        var boforsFireButton;
+        var m102FireButton;
+        var missileFireButton;
+        var mgHeatTemp;
+        var mgHeatText;
+        var boforsMeg = 5;
+        var heatUp;
+        var cursors;
+        var enemy_tank;
+        var explosions;
+        var weaponsGroup;
+        var weapons;
+        var stop = false;
+
+        function create() {
+            mgHeatTemp = 0;
+            heatUp = false;
+
+            game.physics.startSystem(Phaser.Physics.ARCADE);
+
+            game.stage.backgroundColor = '#363636';
+
+            sprite1 = game.add.sprite(150, 150, 'GAU');
+            sprite1.anchor.setTo(0.5, 0.45);
+
+            sprite2 = game.add.sprite(150, 250, 'cannon01');
+            sprite2.anchor.setTo(0.5, 0.5);
+
+            sprite3 = game.add.sprite(150, 350, 'cannon02');
+            sprite3.anchor.setTo(0.5, 0.5);
+
+            sprite4 = game.add.sprite(150, 450, 'missileTurret');
+            sprite4.anchor.setTo(0.5, 0.45);
+
+            // add mg ammos
+            mg = game.add.weapon(30, 'bullet');
+
+            // bullet is automatically eradicated when it leaves the bound
+            mg.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
+
+
+            mg.physicsBodyType = Phaser.Physics.ARCADE;
+
+            // speed-up the rate of fire, 1 round per every 60mc
+            mg.fireRate = 80;
+
+            // projectile speed
+            mg.bulletSpeed = 4000;
+
+            // projectile inaccuracy
+            mg.bulletAngleVariance = 1.5;
+
+            // track cannon, with no offset(0, 0) and true to track sprite rotation
+            mg.trackSprite(sprite1, 0, 0, true);
+
+            // mg heatup monitor
+            mgHeatText = game.add.text(16, 130, 'heat:\n 0/200', { fontSize: '16px', fill: '#ffffff' });
+
+            // add 40mm
+            bofors = game.add.weapon(30, 'shell40');
+            bofors.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
+            bofors.fireRate = 500;
+            bofors.bulletSpeed = 2000;
+            bofors.bulletAngleVariance = 0.5;
+            bofors.trackSprite(sprite2, 0, 0, true);
+
+            // add 105mm
+            m102 = game.add.weapon(30, 'shell105');
+            m102.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
+            m102.fireRate = 2000;
+            m102.bulletSpeed = 1000;
+            m102.bulletAngleVariance = 0.5;
+            m102.trackSprite(sprite3, 0, 0, true);
+
+            // add missile
+            missilePod = game.add.weapon(30, 'hellfire');
+            missilePod.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
+            missilePod.fireRate = 3000;
+            missilePod.bulletSpeed = 400;
+            missilePod.bulletAngleVariance = 0;
+            missilePod.trackSprite(sprite4, 0, 0, true);
+
+            // weapons = [];
+            // weapons.push(mg, bfors, m102, missilePod);
+            // weaponsGroup = game.add.group();
+
+
+
+
+
+
+            // mgFireButton is Z
+            mgFireButton = this.input.keyboard.addKey(Phaser.KeyCode.Z);
+            // boforsFireButton is X
+            boforsFireButton = this.input.keyboard.addKey(Phaser.KeyCode.X);
+            // m102 fire button is C
+            m102FireButton = this.input.keyboard.addKey(Phaser.KeyCode.C);
+            // missileFireButton is V
+            missileFireButton = this.input.keyboard.addKey(Phaser.KeyCode.V);
+
+
+            // add enemies
+            enemy_tank = game.add.group();
+            enemy_tank.enableBody = true;
+            enemy_tank.physicsBodyType = Phaser.Physics.ARCADE;
+            enemy_tank.createMultiple(5, 'enemy-tank');
+            enemy_tank.setAll('anchor.x', 1);
+            enemy_tank.setAll('anchor.y', 1);
+            enemy_tank.setAll('scale.x', 1);
+            enemy_tank.setAll('scale.y', 1);
+            enemy_tank.setAll('angle', 0);
+            enemy_tank.setAll('outOfBoundsKill', true);
+            enemy_tank.setAll('checkWorldBounds', true);
+            enemy_tank.forEach(function(enemy){
+                //addEnemyEmitterTrail(enemy);
+                enemy.body.width = enemy.width;
+                enemy.body.height = enemy.height;
+            });
+            game.debug.body(enemy_tank);
+
+            launchTanks();
+
+                //  An explosion pool
+            explosions = game.add.group();
+            explosions.enableBody = true;
+            explosions.physicsBodyType = Phaser.Physics.ARCADE;
+            explosions.createMultiple(30, 'explosion');
+            explosions.setAll('anchor.x', 4);
+            explosions.setAll('anchor.y', 4);
+            explosions.forEach( function(explosion) {
+                explosion.animations.add('explosion');
+            });
+        }
+
+        function update() {
+
+            //  This will update the sprite.rotation so that it points to the currently active pointer
+            //  On a Desktop that is the mouse, on mobile the most recent finger press.
+
+            sprite1.rotation = game.physics.arcade.angleToPointer(sprite1);
+            sprite2.rotation = game.physics.arcade.angleToPointer(sprite2);
+            sprite3.rotation = game.physics.arcade.angleToPointer(sprite3);
+            sprite4.rotation = game.physics.arcade.angleToPointer(sprite4);
+
+
+            if (mgFireButton.isDown) {
+                if (mgHeatTemp < 200 && (!heatUp)) {
+                    mg.fire();
+                    mgHeatTemp += 1;
+                    if (mgHeatTemp >= 200) {
+                        heatUp = true;
+                    }
+                } else if (mgHeatTemp > 100){
+                    mgHeatTemp -= 1;
+                } else {
+                    heatUp = false;
+                }
+                
+            } else if (mgFireButton.isUp) {
+                if (mgHeatTemp > 0){
+                    mgHeatTemp -= 1;
+                } else {
+                    mgHeatTemp = 0;
+                }
+            }
+            if (boforsFireButton.isDown) {
+                bofors.fire();
+                
+            }
+            if (m102FireButton.isDown) {
+                m102.fire();
+            }
+            if (missileFireButton.isDown) {
+                missilePod.fire();
+            }
+
+            mgHeatText.text = 'heat:\n ' + mgHeatTemp + '/200';
+
+
+            if (mgHeatTemp > 170 || (heatUp && mgHeatTemp > 100)) {
+                    mgHeatText.addColor('#ff0000', 0);
+            } else if (mgHeatTemp > 100) {
+                mgHeatText.addColor('#ffff00', 0);
+            } else {
+                mgHeatText.addColor('#ffffff', 0);
+            }
+
+            game.physics.arcade.overlap(enemy_tank, mg.bullets, hitEnemy, null, this);
+
+            if (!stop) {
+                console.log(enemy_tank.height);
+                console.log(mg.halfWidth);
+                stop = true;
+            }
+
+
+        }
+
+
+
+        function render() {
+            for (var i = 0; i < enemy_tank.length; i++)
+            {
+                game.debug.body(enemy_tank.children[i]);
+                game.debug.body(mg.bullets.children[i]);
+            }
+        }
+
+        function launchTanks() {
+            var MIN_ENEMY_SPACING = 300;
+            var MAX_ENEMY_SPACING = 3000;
+            var ENEMY_SPEED = -40;
+            var enemy = enemy_tank.getFirstExists(false);
+            if (enemy) {
+                enemy.reset(800, game.rnd.integerInRange(200, game.height));
+                enemy.body.velocity.x = ENEMY_SPEED;
+                enemy.body.velocity.y = 0;
+                enemy.body.drag.x = 0;
+                enemy.body.drag.y = 1;
+
+
+                enemy.update = function(){
+                            //  Kill enemies once they go off screen
+                  if ((enemy.y > game.height + 200) || (enemy.x < 300)) {
+                    enemy.kill();
+                  }
+                }
+            }
+
+            // regenerate new foes.
+            game.time.events.add(game.rnd.integerInRange(MIN_ENEMY_SPACING, MAX_ENEMY_SPACING), launchTanks);
+        }
+
+        function hitEnemy(enemy_tank, mg) {
+            var explosion = explosions.getFirstExists(false);
+            explosion.reset(mg.body.x + (mg.body.width / 2), mg.body.y + (mg.body.height / 2));
+            explosion.body.y = enemy_tank.body.y - 50;
+            explosion.body.x = enemy_tank.body.x - 25;
+            explosion.alpha = 5;
+            explosion.play('explosion', 30, false, true);
+            enemy_tank.kill();
+            mg.kill()
+            console.log("HIT!!!")
+        }
+
+
+    };
+
+    </script>
+
+    </body>
+</html>
